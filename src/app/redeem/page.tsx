@@ -7,6 +7,7 @@ export default function RedeemPage() {
   const [status, setStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
 
   const startScanner = () => {
     const scanner = new Html5QrcodeScanner(
@@ -14,10 +15,17 @@ export default function RedeemPage() {
       {
         fps: 10,
         qrbox: 250,
+        disableFlip: true,
         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
         rememberLastUsedCamera: true,
+        // Add camera constraints to prefer front camera
+        aspectRatio: 1.0,
+        videoConstraints: {
+          facingMode: facingMode, // "user" for front camera, "environment" for back camera
+        },
+        // Disable mirroring for front camera
       },
-      false
+      true
     );
     scanner.render(
       async (decodedText) => {
@@ -61,8 +69,18 @@ export default function RedeemPage() {
         {/* QR Scanner */}
         <div
           id="reader"
-          className="w-full h-60 bg-neutral-100 dark:bg-neutral-800 rounded-2xl shadow-inner overflow-hidden"
+          className="w-full h-80 bg-neutral-100 dark:bg-neutral-800 rounded-2xl shadow-inner overflow-hidden"
         ></div>
+
+        {/* Camera Toggle Button */}
+        <button
+          onClick={() =>
+            setFacingMode(facingMode === "user" ? "environment" : "user")
+          }
+          className="text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors"
+        >
+          📷 Switch to {facingMode === "user" ? "Back" : "Front"} Camera
+        </button>
 
         {/* Start Button */}
         <button
