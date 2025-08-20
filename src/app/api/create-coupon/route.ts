@@ -2,31 +2,105 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { expires_at, meta } = body;
+  try {
+    console.log("API route called");
 
-  // Generate random token and hash
-  const token = crypto.randomBytes(20).toString("hex");
-  const token_hash = crypto.createHash("sha256").update(token).digest("hex");
+    // Check environment variables
+    if (!process.env.SUPABASE_URL) {
+      console.error("Missing SUPABASE_URL");
+      return NextResponse.json(
+        { error: "Missing SUPABASE_URL environment variable" },
+        { status: 500 }
+      );
+    }
 
-  const { data, error } = await supabase
-    .from("coupons")
-    .insert([
-      { token_hash, expires_at: expires_at || null, meta: meta || null },
-    ])
-    .select()
-    .single();
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+      return NextResponse.json(
+        { error: "Missing SUPABASE_SERVICE_ROLE_KEY environment variable" },
+        { status: 500 }
+      );
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!process.env.NEXT_PUBLIC_SITE_URL) {
+      console.error("Missing NEXT_PUBLIC_SITE_URL");
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SITE_URL environment variable" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+
+    const { expires_at, meta } = body;
+    console.log("Request body parsed:", { expires_at, meta });
+
+    // Generate random token and hash
+    const token = crypto.randomBytes(20).toString("hex");
+    const token_hash = crypto.createHash("sha256").update(token).digest("hex");
+
+    console.log("Generated token hash");
+
+    const { data, error } = await supabase
+      .from("coupons")
+      .insert([
+        { token_hash, expires_at: expires_at || null, meta: meta || null },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json(
+        { error: `Database error: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    console.log("Coupon created:", data);
+
+    const url = `${process.env.NEXT_PUBLIC_SITE_URL}/redeem?cid=${data.id}&t=${token}`;
+
+    const response = { id: data.id, url, token };
+    console.log("Sending response:", response);
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error("Unexpected error in API route:", error);
+    return NextResponse.json(
+      {
+        error: `Internal server error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      },
+      { status: 500 }
+    );
   }
+}
 
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL}/redeem?cid=${data.id}&t=${token}`;
-  return NextResponse.json({ id: data.id, url, token });
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }

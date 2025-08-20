@@ -10,22 +10,66 @@ export default function GeneratePage() {
     message: string;
   } | null>(null);
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+  const [couponData, setCouponData] = useState<{
+    cid: string;
+    token: string;
+  } | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const qrRef = useRef<HTMLDivElement>(null);
 
   async function createCoupon() {
     setLoading(true);
+    setDebugInfo("Starting coupon creation...");
+
     try {
-      const res = await fetch("/api/create-coupon", {
+      // Add debug info about the request
+      const apiUrl = "/api/create-coupon";
+      setDebugInfo(`Making request to: ${apiUrl}`);
+
+      const requestBody = {};
+      console.log("Request body:", requestBody);
+
+      const res = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       });
+
+      setDebugInfo(`Response status: ${res.status} ${res.statusText}`);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        setDebugInfo(`Error response: ${errorText}`);
+        throw new Error(
+          `HTTP error! status: ${res.status}, message: ${errorText}`
+        );
+      }
+
       const json = await res.json();
-      setQrUrl(json.url);
-      setExpiresAt(new Date(Date.now() + 10 * 60 * 1000)); // 10 min expiry
-      setToast({ type: "success", message: "🎉 Coupon generated!" });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      setDebugInfo(`Response data: ${JSON.stringify(json, null, 2)}`);
+
+      // Extract cid and token from the URL
+      const url = new URL(json.url);
+      const cid = url.searchParams.get("cid");
+      const token = url.searchParams.get("t");
+
+      if (cid && token) {
+        setCouponData({ cid, token });
+        // Create QR data as JSON string instead of URL
+        const qrData = JSON.stringify({ cid, token });
+        setQrUrl(qrData);
+        setExpiresAt(new Date(Date.now() + 10 * 60 * 1000)); // 10 min expiry
+        setToast({ type: "success", message: "🎉 Coupon generated!" });
+        setDebugInfo("Success! Coupon created and QR generated.");
+      } else {
+        throw new Error("Invalid coupon URL format");
+      }
     } catch (err) {
+      console.error("Full error:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setDebugInfo(`Error: ${errorMessage}`);
       setToast({ type: "error", message: "❌ Failed to create coupon" });
     } finally {
       setLoading(false);
@@ -53,11 +97,30 @@ export default function GeneratePage() {
   };
 
   const handleCopy = async () => {
+    if (!couponData) return;
+
     try {
-      await navigator.clipboard.writeText(qrUrl);
+      // Copy the redemption URL for sharing
+      const redemptionUrl = `${window.location.origin}/redeem?cid=${couponData.cid}&t=${couponData.token}`;
+      await navigator.clipboard.writeText(redemptionUrl);
       setToast({ type: "success", message: "🔗 Link copied to clipboard!" });
     } catch {
       setToast({ type: "error", message: "❌ Could not copy link." });
+    }
+  };
+
+  const testApiConnection = async () => {
+    try {
+      setDebugInfo("Testing API connection...");
+
+      // Test if the API route exists
+      const response = await fetch("/api/create-coupon", {
+        method: "OPTIONS",
+      });
+
+      setDebugInfo(`OPTIONS request status: ${response.status}`);
+    } catch (err) {
+      setDebugInfo(`Connection test failed: ${err}`);
     }
   };
 
@@ -80,24 +143,43 @@ export default function GeneratePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-neutral-100 via-white to-neutral-200 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 transition-colors duration-300">
-      <div className="w-full max-w-sm bg-white dark:bg-neutral-900 rounded-3xl shadow-xl p-6 flex flex-col items-center space-y-6">
+      <div className="w-full max-w-md bg-white dark:bg-neutral-900 rounded-3xl shadow-xl p-6 flex flex-col items-center space-y-6">
         <h1 className="text-3xl font-semibold text-neutral-900 dark:text-white tracking-tight">
           🎟️ Generate Coupon
         </h1>
 
-        <button
-          onClick={createCoupon}
-          disabled={loading}
-          className={`w-full rounded-full py-3 text-lg font-medium shadow-md transition-transform ${
-            loading
-              ? "bg-gray-400 dark:bg-neutral-600 text-white cursor-not-allowed"
-              : "bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95"
-          }`}
-        >
-          {loading ? "Creating..." : "Create Coupon & QR"}
-        </button>
+        <div className="w-full flex flex-col gap-2">
+          <button
+            onClick={createCoupon}
+            disabled={loading}
+            className={`w-full rounded-full py-3 text-lg font-medium shadow-md transition-transform ${
+              loading
+                ? "bg-gray-400 dark:bg-neutral-600 text-white cursor-not-allowed"
+                : "bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95"
+            }`}
+          >
+            {loading ? "Creating..." : "Create Coupon & QR"}
+          </button>
 
-        {qrUrl && (
+          <button
+            onClick={testApiConnection}
+            className="w-full bg-blue-500 text-white rounded-full py-2 text-sm font-medium shadow-md hover:scale-105 active:scale-95 transition-transform"
+          >
+            Test API Connection
+          </button>
+        </div>
+
+        {/* Debug Info */}
+        {debugInfo && (
+          <div className="w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+            <h3 className="text-sm font-semibold mb-2">Debug Info:</h3>
+            <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+              {debugInfo}
+            </pre>
+          </div>
+        )}
+
+        {qrUrl && couponData && (
           <>
             <div
               ref={qrRef}
@@ -105,9 +187,13 @@ export default function GeneratePage() {
             >
               <QRCode value={qrUrl} size={200} />
             </div>
-            <p className="text-sm text-center text-gray-700 dark:text-gray-300 break-words">
-              {qrUrl}
-            </p>
+
+            <div className="text-xs text-center text-gray-600 dark:text-gray-400 space-y-1">
+              <p>QR contains: {JSON.stringify(couponData)}</p>
+              <p className="break-words">
+                Redemption URL available via copy button
+              </p>
+            </div>
 
             <div className="w-full flex flex-col gap-2 mt-2">
               <button
@@ -120,7 +206,7 @@ export default function GeneratePage() {
                 onClick={handleCopy}
                 className="w-full bg-gray-100 dark:bg-neutral-700 text-gray-900 dark:text-white rounded-full py-3 text-lg font-medium shadow-md hover:scale-105 active:scale-95 transition-transform"
               >
-                Copy Link
+                Copy Redemption Link
               </button>
             </div>
 
