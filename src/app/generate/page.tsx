@@ -13,20 +13,39 @@ export default function GeneratePage() {
   const [couponData, setCouponData] = useState<{
     cid: string;
     token: string;
+    amount: number;
+    userName: string;
   } | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>("");
   const qrRef = useRef<HTMLDivElement>(null);
 
+  // Form state
+  const [amount, setAmount] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
+
   async function createCoupon() {
+    // Validation
+    if (!amount || parseFloat(amount) <= 0) {
+      setToast({ type: "error", message: "❌ Please enter a valid amount" });
+      return;
+    }
+    if (!userName.trim()) {
+      setToast({ type: "error", message: "❌ Please enter a user name" });
+      return;
+    }
+
     setLoading(true);
     setDebugInfo("Starting coupon creation...");
 
     try {
-      // Add debug info about the request
       const apiUrl = "/api/create-coupon";
       setDebugInfo(`Making request to: ${apiUrl}`);
 
-      const requestBody = {};
+      const requestBody = {
+        amount: parseFloat(amount),
+        user_name: userName.trim(),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
+      };
       console.log("Request body:", requestBody);
 
       const res = await fetch(apiUrl, {
@@ -56,8 +75,15 @@ export default function GeneratePage() {
       const token = url.searchParams.get("t");
 
       if (cid && token) {
-        setCouponData({ cid, token });
-        // Create QR data as JSON string instead of URL
+        const couponInfo = {
+          cid,
+          token,
+          amount: parseFloat(amount),
+          userName: userName.trim(),
+        };
+        setCouponData(couponInfo);
+
+        // Create QR data as JSON string with all info
         const qrData = JSON.stringify({ cid, token });
         setQrUrl(qrData);
         setExpiresAt(new Date(Date.now() + 10 * 60 * 1000)); // 10 min expiry
@@ -90,7 +116,7 @@ export default function GeneratePage() {
       const pngFile = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = pngFile;
-      link.download = "coupon-qr.png";
+      link.download = `coupon-${couponData?.userName}-${couponData?.amount}MNT.png`;
       link.click();
     };
     img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
@@ -100,7 +126,6 @@ export default function GeneratePage() {
     if (!couponData) return;
 
     try {
-      // Copy the redemption URL for sharing
       const redemptionUrl = `${window.location.origin}/redeem?cid=${couponData.cid}&t=${couponData.token}`;
       await navigator.clipboard.writeText(redemptionUrl);
       setToast({ type: "success", message: "🔗 Link copied to clipboard!" });
@@ -112,12 +137,9 @@ export default function GeneratePage() {
   const testApiConnection = async () => {
     try {
       setDebugInfo("Testing API connection...");
-
-      // Test if the API route exists
       const response = await fetch("/api/create-coupon", {
         method: "OPTIONS",
       });
-
       setDebugInfo(`OPTIONS request status: ${response.status}`);
     } catch (err) {
       setDebugInfo(`Connection test failed: ${err}`);
@@ -148,12 +170,45 @@ export default function GeneratePage() {
           🎟️ Generate Coupon
         </h1>
 
+        {/* Form Fields */}
+        <div className="w-full space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              User Name
+            </label>
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Enter recipient name"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Amount (₮)
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter amount in MNT"
+              min="1"
+              step="1"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              disabled={loading}
+            />
+          </div>
+        </div>
+
         <div className="w-full flex flex-col gap-2">
           <button
             onClick={createCoupon}
-            disabled={loading}
+            disabled={loading || !amount || !userName.trim()}
             className={`w-full rounded-full py-3 text-lg font-medium shadow-md transition-transform ${
-              loading
+              loading || !amount || !userName.trim()
                 ? "bg-gray-400 dark:bg-neutral-600 text-white cursor-not-allowed"
                 : "bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95"
             }`}
@@ -181,6 +236,21 @@ export default function GeneratePage() {
 
         {qrUrl && couponData && (
           <>
+            {/* Coupon Info Display */}
+            <div className="w-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-800">
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  Coupon Details
+                </h3>
+                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+                  ₮{couponData.amount.toLocaleString()}
+                </p>
+                <p className="text-blue-700 dark:text-blue-300">
+                  For: {couponData.userName}
+                </p>
+              </div>
+            </div>
+
             <div
               ref={qrRef}
               className="bg-neutral-100 dark:bg-neutral-800 p-4 rounded-2xl shadow-inner"
@@ -189,7 +259,7 @@ export default function GeneratePage() {
             </div>
 
             <div className="text-xs text-center text-gray-600 dark:text-gray-400 space-y-1">
-              <p>QR contains: {JSON.stringify(couponData)}</p>
+              <p>QR contains redemption data</p>
               <p className="break-words">
                 Redemption URL available via copy button
               </p>

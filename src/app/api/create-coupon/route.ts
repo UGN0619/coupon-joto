@@ -47,8 +47,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const { expires_at, meta } = body;
-    console.log("Request body parsed:", { expires_at, meta });
+    const { expires_at, meta, amount, user_name } = body;
+    console.log("Request body parsed:", {
+      expires_at,
+      meta,
+      amount,
+      user_name,
+    });
+
+    // Validate required fields
+    if (!amount || typeof amount !== "number" || amount <= 0) {
+      return NextResponse.json(
+        { error: "Valid amount is required" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !user_name ||
+      typeof user_name !== "string" ||
+      user_name.trim() === ""
+    ) {
+      return NextResponse.json(
+        { error: "User name is required" },
+        { status: 400 }
+      );
+    }
 
     // Generate random token and hash
     const token = crypto.randomBytes(20).toString("hex");
@@ -56,10 +80,25 @@ export async function POST(request: Request) {
 
     console.log("Generated token hash");
 
+    // Prepare meta object with coupon details
+    const couponMeta = {
+      ...meta,
+      amount: amount,
+      user_name: user_name.trim(),
+      created_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from("coupons")
       .insert([
-        { token_hash, expires_at: expires_at || null, meta: meta || null },
+        {
+          token_hash,
+          expires_at: expires_at || null,
+          meta: couponMeta,
+          amount: amount,
+          user_name: user_name.trim(),
+          status: "unused",
+        },
       ])
       .select()
       .single();
@@ -76,7 +115,13 @@ export async function POST(request: Request) {
 
     const url = `${process.env.NEXT_PUBLIC_SITE_URL}/redeem?cid=${data.id}&t=${token}`;
 
-    const response = { id: data.id, url, token };
+    const response = {
+      id: data.id,
+      url,
+      token,
+      amount: data.amount,
+      user_name: data.user_name,
+    };
     console.log("Sending response:", response);
 
     return NextResponse.json(response);
