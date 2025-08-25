@@ -1,10 +1,12 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
 
 export default function GeneratePage() {
   const [qrUrl, setQrUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
@@ -159,13 +161,25 @@ export default function GeneratePage() {
     const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
     return `${months}m ${days}d ${hours}h ${minutes}m`;
   };
+  const handleRedeem = () => {
+    router.push("/redeem");
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-neutral-100 via-white to-neutral-200 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 transition-colors duration-300">
       <div className="w-full max-w-md bg-white dark:bg-neutral-900 rounded-3xl shadow-xl p-6 flex flex-col items-center space-y-6">
+        <button
+          className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg"
+          onClick={handleRedeem}
+        >
+          Redeem Coupon
+        </button>
         <h1 className="text-3xl font-semibold text-neutral-900 dark:text-white tracking-tight">
-          🎟️ Generate Coupon
+          🎟️ Joto Coupon
         </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Powered by ⚙️Joto Education Center
+        </p>
 
         {/* Form Fields */}
         <div className="w-full space-y-4">
