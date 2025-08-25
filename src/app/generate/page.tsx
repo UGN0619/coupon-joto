@@ -16,7 +16,7 @@ export default function GeneratePage() {
     amount: number;
     userName: string;
   } | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
+  // const [debugInfo, setDebugInfo] = useState<string>("");
   const qrRef = useRef<HTMLDivElement>(null);
 
   // Form state
@@ -35,16 +35,21 @@ export default function GeneratePage() {
     }
 
     setLoading(true);
-    setDebugInfo("Starting coupon creation...");
+    // setDebugInfo("Starting coupon creation...");
 
     try {
       const apiUrl = "/api/create-coupon";
-      setDebugInfo(`Making request to: ${apiUrl}`);
+      // setDebugInfo(`Making request to: ${apiUrl}`);
+
+      // Changed expiration to 3 months (90 days)
+      const threeMonthsFromNow = new Date(
+        Date.now() + 90 * 24 * 60 * 60 * 1000
+      );
 
       const requestBody = {
         amount: parseFloat(amount),
         user_name: userName.trim(),
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
+        expires_at: threeMonthsFromNow.toISOString(), // 3 months
       };
       console.log("Request body:", requestBody);
 
@@ -56,18 +61,18 @@ export default function GeneratePage() {
         body: JSON.stringify(requestBody),
       });
 
-      setDebugInfo(`Response status: ${res.status} ${res.statusText}`);
+      // setDebugInfo(`Response status: ${res.status} ${res.statusText}`);
 
       if (!res.ok) {
         const errorText = await res.text();
-        setDebugInfo(`Error response: ${errorText}`);
+        // setDebugInfo(`Error response: ${errorText}`);
         throw new Error(
           `HTTP error! status: ${res.status}, message: ${errorText}`
         );
       }
 
       const json = await res.json();
-      setDebugInfo(`Response data: ${JSON.stringify(json, null, 2)}`);
+      // setDebugInfo(`Response data: ${JSON.stringify(json, null, 2)}`);
 
       // Extract cid and token from the URL
       const url = new URL(json.url);
@@ -86,16 +91,16 @@ export default function GeneratePage() {
         // Create QR data as JSON string with all info
         const qrData = JSON.stringify({ cid, token });
         setQrUrl(qrData);
-        setExpiresAt(new Date(Date.now() + 10 * 60 * 1000)); // 10 min expiry
+        setExpiresAt(threeMonthsFromNow); // Updated to 3 months expiry
         setToast({ type: "success", message: "🎉 Coupon generated!" });
-        setDebugInfo("Success! Coupon created and QR generated.");
+        // setDebugInfo("Success! Coupon created and QR generated.");
       } else {
         throw new Error("Invalid coupon URL format");
       }
     } catch (err) {
       console.error("Full error:", err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setDebugInfo(`Error: ${errorMessage}`);
+      // const errorMessage = err instanceof Error ? err.message : String(err);
+      // setDebugInfo(`Error: ${errorMessage}`);
       setToast({ type: "error", message: "❌ Failed to create coupon" });
     } finally {
       setLoading(false);
@@ -134,18 +139,6 @@ export default function GeneratePage() {
     }
   };
 
-  const testApiConnection = async () => {
-    try {
-      setDebugInfo("Testing API connection...");
-      const response = await fetch("/api/create-coupon", {
-        method: "OPTIONS",
-      });
-      setDebugInfo(`OPTIONS request status: ${response.status}`);
-    } catch (err) {
-      setDebugInfo(`Connection test failed: ${err}`);
-    }
-  };
-
   useEffect(() => {
     if (toast) {
       const timeout = setTimeout(() => setToast(null), 3000);
@@ -158,9 +151,13 @@ export default function GeneratePage() {
     const now = new Date();
     const diff = expiresAt.getTime() - now.getTime();
     if (diff <= 0) return "Expired";
-    const minutes = Math.floor(diff / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    const months = Math.floor(diff / (30 * 24 * 60 * 60 * 1000));
+    const days = Math.floor(
+      (diff % (30 * 24 * 60 * 60 * 1000)) / (24 * 60 * 60 * 1000)
+    );
+    const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    return `${months}m ${days}d ${hours}h ${minutes}m`;
   };
 
   return (
@@ -215,16 +212,9 @@ export default function GeneratePage() {
           >
             {loading ? "Creating..." : "Create Coupon & QR"}
           </button>
-
-          <button
-            onClick={testApiConnection}
-            className="w-full bg-blue-500 text-white rounded-full py-2 text-sm font-medium shadow-md hover:scale-105 active:scale-95 transition-transform"
-          >
-            Test API Connection
-          </button>
         </div>
 
-        {/* Debug Info */}
+        {/* Debug Info
         {debugInfo && (
           <div className="w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
             <h3 className="text-sm font-semibold mb-2">Debug Info:</h3>
@@ -232,7 +222,7 @@ export default function GeneratePage() {
               {debugInfo}
             </pre>
           </div>
-        )}
+        )} */}
 
         {qrUrl && couponData && (
           <>

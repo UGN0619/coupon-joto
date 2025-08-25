@@ -88,12 +88,17 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
+    // Use provided expires_at or default to 3 months from now
+    const finalExpiresAt =
+      expires_at ||
+      new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
     const { data, error } = await supabase
       .from("coupons")
       .insert([
         {
           token_hash,
-          expires_at: expires_at || null,
+          expires_at: finalExpiresAt,
           meta: couponMeta,
           amount: amount,
           user_name: user_name.trim(),
@@ -121,6 +126,7 @@ export async function POST(request: Request) {
       token,
       amount: data.amount,
       user_name: data.user_name,
+      expires_at: data.expires_at,
     };
     console.log("Sending response:", response);
 
